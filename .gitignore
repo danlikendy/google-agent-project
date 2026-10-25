@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+.venv/
+.DS_Store
+data/repos/
+data/swebench_lite.json
+paper/*.aux
+paper/*.log
+paper/*.out
+paper/*.bbl
+paper/*.blg
+paper/*.pdf
+results/run.log
+results/*.partial.jsonl
