@@ -232,6 +232,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--limit", type=int, default=0)
     parser.add_argument("--repo", action="append", default=[])
     parser.add_argument("--fanout", default="4,8,16")
+    parser.add_argument("--prior", type=Path, default=None, help="scored rows to keep and skip")
+    parser.add_argument("--after", default="", help="last instance id already finished, inclusive")
     args = parser.parse_args(argv)
 
     fanouts = [int(item) for item in args.fanout.split(",") if item]
@@ -241,11 +243,27 @@ def main(argv: list[str] | None = None) -> int:
         instances = [row for row in instances if row["repo"] in wanted]
     if args.limit:
         instances = instances[: args.limit]
-    by_id = {row["instance_id"]: row for row in instances}
+    prior: list[dict] = []
+    if args.prior and args.prior.exists():
+        prior = load_instances(args.prior)
+    if args.after:
+        offset = next(i for i, task in enumerate(instances) if task["instance_id"] == args.after)
+        instances = instances[offset + 1 :]
+    by_id = {row["instance_id"]: row for row in load_instances(args.instances)}
 
     args.out.mkdir(parents=True, exist_ok=True)
     rows: list[dict] = []
     skipped: Counter = Counter()
+    if args.after:
+        remaining = {task["instance_id"] for task in instances}
+        log_path = args.out / "run.log"
+        if log_path.exists():
+            for line in log_path.read_text(encoding="utf-8", errors="replace").splitlines():
+                if not line.startswith("[") or " skip " not in line:
+                    continue
+                instance_id = line.split(" skip ", 1)[1].split(":", 1)[0].strip()
+                if instance_id not in remaining:
+                    skipped[line.rsplit(": ", 1)[-1].strip()] += 1
     started = time.time()
 
     for index, task in enumerate(instances, start=1):
@@ -300,14 +318,15 @@ def main(argv: list[str] | None = None) -> int:
             f"{'visible' if visible else 'hidden'}  slice@10={flag}",
             flush=True,
         )
-        if index % 25 == 0:
-            _write(args.out, rows, skipped, fanouts, partial=True)
+        if index % 5 == 0:
+            _write(args.out, prior + rows, skipped, fanouts, partial=True)
 
+    rows = prior + rows
     summary = {str(fanout): aggregate(rows, str(fanout)) for fanout in fanouts}
     payload = {
         "benchmark": "SWE-bench Lite test",
         "source": "princeton-nlp/SWE-bench_Lite",
-        "n_instances": len(instances),
+        "n_instances": len(by_id),
         "n_scored": len(rows),
         "skipped": dict(skipped),
         "fanouts": fanouts,
