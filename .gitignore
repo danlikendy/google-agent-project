@@ -11,4 +11,6 @@ paper/*.bbl
 paper/*.blg
 paper/*.pdf
 results/run.log
+results/run_rest.log
+results/resume.pid
 results/*.partial.jsonl
