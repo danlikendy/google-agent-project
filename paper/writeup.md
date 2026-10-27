@@ -6,13 +6,15 @@ Artem Tsygantsov
 
 ## Abstract
 
-A local coding agent does not read a repository. It reads until a budget runs out. On the 280 SWE-bench Lite tasks whose fix lands inside a function, BM25 places the right file in its top 10 on 155 tasks, and the first 1024 tokens of those files contain the edited function 21 times. Packing whole function spans from BM25 over the function text contains it 89 times. Doing what an agent usually does, opening the top five files and only then taking functions, lands in between, at 68. On the 203 issues that never name the edited function, a walk from a similarly named test along the call graph votes 161 times and does not place that function in the top 10 once.
+A local coding agent does not read a repository. It reads until a budget runs out. On the 280 SWE-bench Lite tasks whose fix lands inside a function, BM25 places the right file in its top 10 on 155 tasks, and the first 1024 tokens of those files contain the edited function 21 times. Packing whole function spans from BM25 over the function text contains it 89 times. Doing what an agent usually does, opening the top five files and only then taking functions, lands in between, at 68. On the 203 issues that never name the edited function, a walk from a similarly named test along the call graph votes 161 times and does not place that function in the top 10 once. The same order holds on the 115 function-level tasks in the competition's public development set: 39, 33 and 11.
 
 ## 1. What is measured
 
 SWE-bench gives a model an issue and a checkout and keeps a patch only when the tests pass (Jimenez et al., 2024). The agents built on top of it spend much of their work finding the edit before they write it (Yang et al., 2024; Xia et al., 2024; Zhang et al., 2024; Ouyang et al., 2025). The Gemma 4 paper track asks for a result that still holds for a model on one machine, and past the competition's four development repositories (Markowitz et al., 2026). Notes on that development set already say the supplied embeddings barely separate symbols, and that a call-graph walk does not repair a missed seed (GraphLoc-129). They score a ranked list. This note scores whether the edited function fits in a fixed number of tokens.
 
 The tasks are the public test split of SWE-bench Lite: 300 issues, twelve Python repositories. 280 fixes fall inside a function. Eighteen are module-level. One base commit was absent from the clone, and one file overflowed the parser. The ranker sees the problem statement only. Hints and the tests added for grading are not used. Gold is the smallest function or method, at the base commit, that contains a deleted line of the reference patch. A pure insertion is charged to the function around the insertion point. Test paths are ignored. A task is hidden when no gold function's name appears in the issue, ignoring generic verbs such as `get` and `update`. That split has 203 tasks. The other 77 name the function.
+
+The same measurement was repeated on the competition's public development tasks, 129 pull requests in fastapi, rich, requests and httpx. The text is the pull request plus the issue it says it fixes. The diff is that pull request. 115 of the 129 edits fall inside a function.
 
 Hit@10 is a gold function in the top ten, or a gold file for the file ranker. A budget hit means the whole function is inside the packed context. Every row uses `len(text) // 4` as its token count. Trees come from `git cat-file`. No model is called.
 
@@ -48,13 +50,23 @@ On the 203 hidden issues the function spans contain the edit 47 times at 1024 to
 
 Django contributes 102 of the 280 tasks, SymPy 72. In Django the 1024-token counts are 43 for function spans, 25 for five files, 15 for the file prefix. In SymPy they are 18, 15 and 1. The smaller repositories are in `results/summary.json`.
 
+On the development set the order is the same. Out of 115:
+
+| | hit@10 | 1024 tokens | 4096 tokens |
+| --- | ---: | ---: | ---: |
+| file, read from the top | 69 | 11 | 32 |
+| top five files, then their functions | 45 | 33 | 48 |
+| function spans | 61 | 39 | 72 |
+
+Where the issue names the function, 26 tasks, packing that name contains the edit 23 times at 1024 tokens. Function spans contain it 11 times there, and the file prefix contains it never. On the other 89, function spans contain it 28 times and the name channel 8. The rows are in `results/gemma4/`.
+
 ## 4. Where this sits
 
 Retrieval localization has ranked files from bug reports for a long time (Zhou, Zhang and Lo, 2012). Agentless asks a model to go from file to element to line (Xia et al., 2024). Part of that step is available before any model runs: return the span, not the file. RepoGraph and GraphLocator use a graph as something a model can navigate or grow (Ouyang et al., 2025; Liu et al., 2026). That can still help after the span is known. On this split it does not find the span.
 
 ## 5. Limits
 
-Gemma was not run, so a function in context is not a passing patch. Calls through local variables are unresolved, and that is part of the bridge result. Module-level edits are outside the table. A pure insertion can be charged to a neighbor. SWE-bench Lite is not the competition's hidden set, and it is Python. Another tokenizer would move the counts. It would move every row by the same rule, and the claim is the order.
+Gemma was not run, so a function in context is not a passing patch. Calls through local variables are unresolved, and that is part of the bridge result. Module-level edits are outside the table. A pure insertion can be charged to a neighbor. The development tasks are the public pull requests, not the hidden test and not a byte copy of the competition file. Both sets are Python. Another tokenizer would move the counts. It would move every row by the same rule, and the claim is the order.
 
 ## References
 
