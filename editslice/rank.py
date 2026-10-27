@@ -281,6 +281,12 @@ def rank_bm25_functions(graph: Graph, issue: str, topn: int = 100) -> list[str]:
     return bm25_top(docs, tokenize(issue), topn=topn)
 
 
+def keep_in_files(graph: Graph, function_ids: list[str], files: list[str]) -> list[str]:
+    """Function ranking restricted to a file shortlist, order preserved."""
+    allowed = set(files)
+    return [sid for sid in function_ids if graph.symbols[sid].file in allowed]
+
+
 def rank_bm25_files(graph: Graph, issue: str, topn: int = 30) -> list[str]:
     from editslice.graph import is_test_path
 

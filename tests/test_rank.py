@@ -4,7 +4,7 @@ from pathlib import Path
 
 from editslice.anchors import extract
 from editslice.graph import build_graph, build_graph_from_tree
-from editslice.rank import rank_bridge, rank_literal, rank_name, rank_raise, rrf
+from editslice.rank import keep_in_files, rank_bridge, rank_literal, rank_name, rank_raise, rrf
 from editslice.score import mentions_gold_name
 from tests.test_graph import write_repo
 
@@ -46,6 +46,12 @@ class RankTests(unittest.TestCase):
             )[0],
             self.target,
         )
+
+    def test_file_shortlist_drops_functions_outside_it(self):
+        other = next(s.sid for s in self.graph.symbols.values() if s.name == "status")
+        kept = keep_in_files(self.graph, [other, self.target], ["pkg/server.py"])
+        self.assertEqual(kept, [other, self.target])
+        self.assertEqual(keep_in_files(self.graph, [self.target], ["other.py"]), [])
 
     def test_raise_abstains_when_the_exception_is_everywhere(self):
         files = {

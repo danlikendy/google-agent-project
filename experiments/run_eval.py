@@ -24,6 +24,7 @@ from editslice.gold import changed_lines, gold_functions  # noqa: E402
 from editslice.graph import build_graph, is_test_path  # noqa: E402
 from editslice.pack import pack_files, pack_functions  # noqa: E402
 from editslice.rank import (  # noqa: E402
+    keep_in_files,
     rank_bm25_files,
     rank_bm25_functions,
     rank_bridge,
@@ -41,7 +42,18 @@ from editslice.score import (  # noqa: E402
     reciprocal_rank,
 )
 
-CHANNEL_METHODS = ("name", "literal", "raise", "bridge", "editslice", "bm25_func", "bm25_file")
+CHANNEL_METHODS = (
+    "name",
+    "literal",
+    "raise",
+    "bridge",
+    "editslice",
+    "bm25_func",
+    "bm25_file",
+    "span1",
+    "span3",
+    "span5",
+)
 
 
 def load_instances(path: Path) -> list[dict]:
@@ -77,7 +89,7 @@ def _cell(ranked: list[str], gold: list[str], packed: dict[int, list[str]]) -> d
 
 def score_graph(graph, issue: str, gold: list[str], fanouts: list[int]) -> dict:
     anchors = extract(issue)
-    function_rank = rank_bm25_functions(graph, issue)
+    function_rank = rank_bm25_functions(graph, issue, topn=200)
     file_rank = rank_bm25_files(graph, issue)
     gold_files = list(dict.fromkeys(graph.symbols[sid].file for sid in gold))
     by_fanout = {}
@@ -106,6 +118,10 @@ def score_graph(graph, issue: str, gold: list[str], fanouts: list[int]) -> dict:
             str(budget): round(budget_recall(file_packed[budget], gold), 4) for budget in BUDGETS
         }
         block["bm25_file"] = file_cell
+        for width, name in ((1, "span1"), (3, "span3"), (5, "span5")):
+            ranking = keep_in_files(graph, function_rank, file_rank[:width])
+            packed = {budget: _pack_ids(graph, ranking, budget, False) for budget in BUDGETS}
+            block[name] = _cell(ranking, gold, packed)
         by_fanout[str(fanout)] = block
     return by_fanout
 
@@ -169,6 +185,8 @@ def repo_table(rows: list[dict], fanout: str) -> dict:
             "bm25_file_budget1024": _rate(items, fanout, "bm25_file", "budget_hit", "1024"),
             "editslice_budget1024": _rate(items, fanout, "editslice", "budget_hit", "1024"),
             "bm25_func_budget1024": _rate(items, fanout, "bm25_func", "budget_hit", "1024"),
+            "span5_budget1024": _rate(items, fanout, "span5", "budget_hit", "1024"),
+            "span5_hit10": _rate(items, fanout, "span5", "hit", "10"),
             "hidden_editslice_hit10": _rate(hidden, fanout, "editslice", "hit", "10"),
             "hidden_bm25_func_hit10": _rate(hidden, fanout, "bm25_func", "hit", "10"),
         }
