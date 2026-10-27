@@ -4,6 +4,8 @@ __pycache__/
 .DS_Store
 data/repos/
 data/swebench_lite.json
+data/gemma4_tasks_index.json
+data/gemma4_tasks.jsonl
 paper/*.aux
 paper/*.log
 paper/*.out
