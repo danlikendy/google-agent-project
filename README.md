@@ -1,6 +1,6 @@
 # EditSlice
 
-Pack the functions a bug report points at, under a token budget. On 280 SWE-bench Lite fixes that land inside a function, reading BM25's files from the top contains the edit 21 times in 1024 tokens. Opening the top five files and packing functions inside them contains it 68 times. Packing function spans from BM25 over the function text contains it 89 times. On the 115 function-level tasks in the competition's public development set the same three counts are 11, 33 and 39. The note is `paper/writeup.md`.
+Pack the functions a bug report points at, under a token budget. When BM25's first file is the file that changes, the edited function still begins a median of 1727 tokens into it on SWE-bench Lite and 1629 tokens into it on the competition's development tasks. Reading that file from the top contains the edit 21 and 9 times. Packing functions inside the same file contains it 48 and 17 times. The note is `paper/writeup.md`.
 
 The command ranks functions with BM25 over the path, signature, docstring and body, then packs whole spans until the budget is spent. A span that does not fit is skipped. The evaluation also reads files from the top, packs functions only inside the top one, three or five files, and scores a symbol graph (name, quoted string, raised exception, test-to-callee) that stays quiet when a signal is common. The graph does not beat the function text. It is built with the standard library parser.
 

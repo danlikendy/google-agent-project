@@ -1,72 +1,60 @@
-# Read the function
+# The edit is a thousand tokens down
 
-### A token budget changes what repository search should return
+### A correct file retrieval still starts too early
 
 Artem Tsygantsov
 
 ## Abstract
 
-A local coding agent does not read a repository. It reads until a budget runs out. On the 280 SWE-bench Lite tasks whose fix lands inside a function, BM25 places the right file in its top 10 on 155 tasks, and the first 1024 tokens of those files contain the edited function 21 times. Packing whole function spans from BM25 over the function text contains it 89 times. Doing what an agent usually does, opening the top five files and only then taking functions, lands in between, at 68. On the 203 issues that never name the edited function, a walk from a similarly named test along the call graph votes 161 times and does not place that function in the top 10 once. The same order holds on the 115 function-level tasks in the competition's public development set: 39, 33 and 11.
+BM25 often names the right file, and the edit is still not in what an agent reads first. On 62 SWE-bench Lite tasks where the top-ranked file is the one that changes, the edited function begins a median of 1727 tokens into that file and is not finished until 2192. Reading the file from the top contains the function 21 times. Packing whole functions from inside the same file contains it 48 times. On the 28 development tasks with the same property the function begins at a median of 1629 tokens: the prefix contains it 9 times, the functions inside the file 17. Ranking functions across the whole repository stays ahead of both, because the top file is often the wrong file.
 
 ## 1. What is measured
 
-SWE-bench gives a model an issue and a checkout and keeps a patch only when the tests pass (Jimenez et al., 2024). The agents built on top of it spend much of their work finding the edit before they write it (Yang et al., 2024; Xia et al., 2024; Zhang et al., 2024; Ouyang et al., 2025). The Gemma 4 paper track asks for a result that still holds for a model on one machine, and past the competition's four development repositories (Markowitz et al., 2026). Notes on that development set already say the supplied embeddings barely separate symbols, and that a call-graph walk does not repair a missed seed (GraphLoc-129). They score a ranked list. This note scores whether the edited function fits in a fixed number of tokens.
+SWE-bench gives a model an issue and a checkout and keeps a patch when the tests pass (Jimenez et al., 2024). Agents spend much of the work finding the edit before they write it (Yang et al., 2024; Xia et al., 2024; Zhang et al., 2024; Ouyang et al., 2025). Public notes on the Gemma 4 development set already score whether a file or a graph node is in a ranked list (GraphLoc-129; the graph-retrieval benchmark of Jha, 2026). A list is not a read. This note measures where the edited function sits inside the file that was ranked first, and whether a fixed token budget reaches it.
 
-The tasks are the public test split of SWE-bench Lite: 300 issues, twelve Python repositories. 280 fixes fall inside a function. Eighteen are module-level. One base commit was absent from the clone, and one file overflowed the parser. The ranker sees the problem statement only. Hints and the tests added for grading are not used. Gold is the smallest function or method, at the base commit, that contains a deleted line of the reference patch. A pure insertion is charged to the function around the insertion point. Test paths are ignored. A task is hidden when no gold function's name appears in the issue, ignoring generic verbs such as `get` and `update`. That split has 203 tasks. The other 77 name the function.
+Two sets are used. SWE-bench Lite contributes 300 issues from twelve Python repositories; 280 fixes fall inside a function. The competition's public development tasks contribute 129 pull requests from fastapi, rich, requests and httpx; 115 fixes fall inside a function. The issue text for the second set is the pull request plus the issue it says it fixes. The ranker sees that text and the tree at the base commit. Gold is the smallest function or method that contains a deleted line of the reference diff. A pure insertion is charged to the function around the insertion point. Test paths are ignored.
 
-The same measurement was repeated on the competition's public development tasks, 129 pull requests in fastapi, rich, requests and httpx. The text is the pull request plus the issue it says it fixes. The diff is that pull request. 115 of the 129 edits fall inside a function.
+Hit@10 is a gold function in the top ten, or a gold file for the file ranker. A budget hit means the whole function is inside the packed context. Every count uses `len(text) // 4`. For a task whose top file is a gold file, the position of the edit is the token cost of that file through the end line of its earliest gold function, and the cost of the lines before the function starts. Trees come from `git cat-file`. No model is called.
 
-Hit@10 is a gold function in the top ten, or a gold file for the file ranker. A budget hit means the whole function is inside the packed context. Every row uses `len(text) // 4` as its token count. Trees come from `git cat-file`. No model is called.
+## 2. Two ways to read a file that is already known
 
-## 2. Three ways to spend the budget
+Both ways use binary BM25: a query token counts once per document (Robertson and Zaragoza, 2009). Issue text is cut at 20,000 characters.
 
-All three use binary BM25: a query token counts once per document (Robertson and Zaragoza, 2009). Issue text is cut at 20,000 characters.
+**From the top.** Rank files, drop tests, read each file from the first line until the budget ends. A function counts only when its last line is inside that prefix.
 
-**File.** Rank files, drop tests, read each chosen file from the top until the budget ends. A function counts only when its last line is inside that prefix.
+**Functions inside the file.** Rank functions by BM25 over the path, the signature, the docstring and the body. Keep only the functions that live in the top file, or in the top five, and pack whole spans. Skip a span that does not fit.
 
-**Function.** Rank functions by BM25 over the path, the signature, the docstring and the body. Pack whole spans in that order. Skip a span that does not fit, and do not charge a span that overlaps one already taken.
-
-**Shortlist.** Keep that same function order, drop every function whose file is outside the top one, three or five files, then pack spans. This is an agent opening a few files and only searching inside them.
-
-`python -m editslice` does the function row. It is the one that wins the budget.
-
-A symbol graph is included as a control, not as the method. The parser records spans, string constants, raised names, and calls that can be resolved statically: an import, `self`, a class attribute, a short re-export, or a name that exists once in the tree. Four channels stay silent when a signal hits more than eight functions. They are the function's name, a quoted string, a raised exception, and a test that shares a rare token with the issue, followed along those calls. Surviving lists are fused with reciprocal rank fusion at k = 60, with no fitted weights and no fallback to BM25. The implementation is `editslice/`.
+**Functions, no file list.** The same function ranking, with no file filter. `python -m editslice` does this. It is the best list when the top file is allowed to be wrong. The measurement below is about the other case, when the top file is right and the only question is where to start reading.
 
 ## 3. Results
 
-| | hit@10 | 1024 tokens | 4096 tokens |
-| --- | ---: | ---: | ---: |
-| file, read from the top | 155 | 21 | 66 |
-| top file, then its functions | 54 | 48 | 58 |
-| top five files, then their functions | 91 | 68 | 103 |
-| function spans | 124 | 89 | 144 |
-| fused graph channels | 52 | 36 | 63 |
+On SWE-bench Lite the top file is right 62 times out of 280. The edited function in that file starts at a median of 1727 tokens and ends at a median of 2192. On 36 of the 62 it has not started by token 1024. On 5 more it has started and not ended. The prefix therefore contains the function 21 times, and misses it 41 times. Packing the functions that BM25 ranks inside that same file contains it 48 times. Three of the functions that remain missing are themselves larger than 1024 tokens.
 
-Counts are out of 280. Hit@10 in the file row is a gold file. Every other hit@10 is a gold function. The token columns count a gold function whose source fits, and they can be compared across rows.
+On the development set the top file is right 28 times out of 115. The function starts at a median of 1629 tokens and ends at a median of 2137. It has not started by token 1024 on 17 of the 28, and has not ended on 19. The prefix contains it 9 times. The functions inside the file contain it 17 times.
 
-The file list is a bad thing to read. It names the right file 62 times at rank 1, and on 41 of those 62 the first 1024 tokens still miss the function. Packing functions from inside that one file moves the count from 21 to 48. Five files move it to 68. Throwing the file list away and packing the function ranking moves it to 89. The shortlist is not a refinement of the function ranking. It deletes edits whose file came sixth or worse, and many of those edits still fit in the function ranking's budget. At 4096 tokens the order is the same: 66 for the file prefix, 103 for five files, 144 for function spans.
-
-On the 203 hidden issues the function spans contain the edit 47 times at 1024 tokens. The five-file shortlist contains it 37 times, the file prefix 14. The test bridge votes on 161 of the 203 and is never in the top 10. A quoted string is in the top 10 on 16. The fused channels are on 17. Nothing in the static graph beat the function text.
-
-Django contributes 102 of the 280 tasks, SymPy 72. In Django the 1024-token counts are 43 for function spans, 25 for five files, 15 for the file prefix. In SymPy they are 18, 15 and 1. The smaller repositories are in `results/summary.json`.
-
-On the development set the order is the same. Out of 115:
+The file list is still the wrong place to stop. Once tasks whose top file is wrong are put back in, ranking functions over the whole tree contains the edit more often than ranking them inside the top file.
 
 | | hit@10 | 1024 tokens | 4096 tokens |
 | --- | ---: | ---: | ---: |
-| file, read from the top | 69 | 11 | 32 |
-| top five files, then their functions | 45 | 33 | 48 |
-| function spans | 61 | 39 | 72 |
+| SWE-bench Lite, file from the top | 155 | 21 | 66 |
+| SWE-bench Lite, functions in the top file | 54 | 48 | 58 |
+| SWE-bench Lite, functions in the top five files | 91 | 68 | 103 |
+| SWE-bench Lite, functions, no file list | 124 | 89 | 144 |
+| development set, file from the top | 69 | 11 | 32 |
+| development set, functions in the top five files | 45 | 33 | 48 |
+| development set, functions, no file list | 61 | 39 | 72 |
 
-Where the issue names the function, 26 tasks, packing that name contains the edit 23 times at 1024 tokens. Function spans contain it 11 times there, and the file prefix contains it never. On the other 89, function spans contain it 28 times and the name channel 8. The rows are in `results/gemma4/`.
+The first four rows are out of 280. The last three are out of 115. Hit@10 in a file row is a gold file. Every budget column is a gold function whose source fits.
+
+A separate split is worth one number and no policy. Packing a function because the issue spells its name contains the edit on 23 of the 26 development tasks where a gold name appears, and on 25 of the 77 SWE-bench Lite tasks where one appears. Function ranking contains it on 11 and 42 of those same tasks. The position of the edit does not depend on this split. Rows are in `results/place.json`, `results/summary.json` and `results/gemma4/`.
 
 ## 4. Where this sits
 
-Retrieval localization has ranked files from bug reports for a long time (Zhou, Zhang and Lo, 2012). Agentless asks a model to go from file to element to line (Xia et al., 2024). Part of that step is available before any model runs: return the span, not the file. RepoGraph and GraphLocator use a graph as something a model can navigate or grow (Ouyang et al., 2025; Liu et al., 2026). That can still help after the span is known. On this split it does not find the span.
+File ranking from bug reports is an old result (Zhou, Zhang and Lo, 2012). Agentless asks a model to go from file to element to line (Xia et al., 2024). The step from the file to the function is partly available before the model runs, and it is not "read the file." On these two sets the function begins more than a thousand tokens into the file that retrieval already got right. RepoGraph and GraphLocator use a graph as something a model can navigate after a seed exists (Ouyang et al., 2025; Liu et al., 2026). The seed this note can defend is the span, not the call that leaves it.
 
 ## 5. Limits
 
-Gemma was not run, so a function in context is not a passing patch. Calls through local variables are unresolved, and that is part of the bridge result. Module-level edits are outside the table. A pure insertion can be charged to a neighbor. The development tasks are the public pull requests, not the hidden test and not a byte copy of the competition file. Both sets are Python. Another tokenizer would move the counts. It would move every row by the same rule, and the claim is the order.
+Gemma was not run, so a function in context is not a passing patch. The development texts are the public pull requests, not the hidden test and not a byte copy of the competition file. Module-level edits are outside the counts. A pure insertion can be charged to a neighbor. Another tokenizer would move the medians. It would move the prefix and the packed spans by the same rule. The claim is that the edit sits past the prefix, and that packing the functions in a file that is already known recovers part of that gap and not all of it.
 
 ## References
 
@@ -89,3 +77,5 @@ Liu, W., Peng, C., Gao, P., Liu, A., Zhang, W., Zhao, H., and Jin, Z. GraphLocat
 Markowitz, E., Perozzi, B., Rózemberczki, B., Cameron, G., Hemmati, H., Li, Y., Galkin, M., Farhadi, M., Holbrook, R., and Oldacre, A. Google - The Gemma 4 Developer Agent Paper Track. Kaggle, 2026.
 
 GraphLoc-129: SWE bug localization benchmark. Kaggle dataset, 2026.
+
+Jha, H. K. Gemma 4 graph-retrieval benchmark. Hugging Face dataset, 2026.
