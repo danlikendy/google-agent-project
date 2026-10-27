@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from pathlib import Path
 
-from editslice.graph import build_graph_from_tree
+from editslice.gitio import files_at_commit
+from editslice.graph import build_graph, build_graph_from_tree
 from editslice.pack import pack_functions, token_cost
 from editslice.rank import rank_bm25_functions
 
@@ -15,12 +17,22 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Pack the functions an issue points at into a token budget.")
     parser.add_argument("repo", type=Path)
     parser.add_argument("--issue", required=True, type=Path)
+    parser.add_argument("--commit", help="read this commit instead of the working tree")
     parser.add_argument("--budget", type=int, default=1024)
     parser.add_argument("--json", action="store_true", dest="as_json")
     args = parser.parse_args(argv)
 
     issue = args.issue.read_text(encoding="utf-8", errors="replace")
-    graph = build_graph_from_tree(args.repo)
+    if args.commit:
+        graph = build_graph(files_at_commit(args.repo, args.commit))
+    else:
+        graph = build_graph_from_tree(args.repo)
+    if not graph.symbols:
+        print(
+            "no Python files found. The clones in data/repos have no checkout; pass --commit.",
+            file=sys.stderr,
+        )
+        return 1
     ranked = rank_bm25_functions(graph, issue, topn=200)
     packed = pack_functions(graph, ranked, args.budget)
     spans = [

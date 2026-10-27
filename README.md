@@ -6,9 +6,10 @@ The command ranks functions with BM25 over the path, signature, docstring and bo
 
 ## Run it on a checkout
 
+The clones under `data/repos` have no working tree. Pass the commit.
+
 ```bash
-python -m editslice /path/to/repo --issue issue.txt --budget 1024
-python -m editslice /path/to/repo --issue issue.txt --budget 1024 --json
+python3 -m editslice data/repos/requests --commit 110048f9837f8441ea536804115e80b69f400277 --issue examples/requests-1963.txt
 ```
 
 ## Reproduce the numbers
