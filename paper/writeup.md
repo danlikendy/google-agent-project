@@ -6,7 +6,7 @@ Artem Tsygantsov
 
 ## Abstract
 
-BM25 often names the right file, and the edit is still not in what an agent reads first. On 62 SWE-bench Lite tasks where the top-ranked file is the one that changes, the edited function begins a median of 1727 tokens into that file and is not finished until 2192. Reading the file from the top contains the function 21 times. Packing whole functions from inside the same file contains it 48 times. On the 28 development tasks with the same property the function begins at a median of 1629 tokens: the prefix contains it 9 times, the functions inside the file 17. Ranking functions across the whole repository stays ahead of both, because the top file is often the wrong file.
+BM25 often names the right file, and the edit is still not in what an agent reads first. On 62 SWE-bench Lite tasks where the top-ranked file is the one that changes, the edited function begins a median of 1727 tokens into that file and is not finished until 2192. Reading the file from the top contains the function 21 times. Packing whole functions from inside the same file contains it 48 times. On the 28 development tasks with the same property the function begins at a median of 1629 tokens: the prefix contains it 9 times, the functions inside the file 17. Ranking functions across the whole repository stays ahead of both, because the top file is often the wrong file. Gemma 4 12B QAT, given the same 1024-token budget, names the gold function on 109 of the 280 SWE-bench Lite tasks from packed spans and on 88 from the file prefix. On the development set the counts are 48 and 38.
 
 ## 1. What is measured
 
@@ -14,7 +14,9 @@ SWE-bench gives a model an issue and a checkout and keeps a patch when the tests
 
 Two sets are used. SWE-bench Lite contributes 300 issues from twelve Python repositories; 280 fixes fall inside a function. The competition's public development tasks contribute 129 pull requests from fastapi, rich, requests and httpx; 115 fixes fall inside a function. The issue text for the second set is the pull request plus the issue it says it fixes. The ranker sees that text and the tree at the base commit. Gold is the smallest function or method that contains a deleted line of the reference diff. A pure insertion is charged to the function around the insertion point. Test paths are ignored.
 
-Hit@10 is a gold function in the top ten, or a gold file for the file ranker. A budget hit means the whole function is inside the packed context. Every count uses `len(text) // 4`. For a task whose top file is a gold file, the position of the edit is the token cost of that file through the end line of its earliest gold function, and the cost of the lines before the function starts. Trees come from `git cat-file`. No model is called.
+Hit@10 is a gold function in the top ten, or a gold file for the file ranker. A budget hit means the whole function is inside the packed context. Every count uses `len(text) // 4`. For a task whose top file is a gold file, the position of the edit is the token cost of that file through the end line of its earliest gold function, and the cost of the lines before the function starts. Trees come from `git cat-file`.
+
+Gemma 4 12B QAT (`gemma4:12b-it-qat` in Ollama) is asked, once per packing, to name the function to edit. The prompt is the issue and the packed 1024 tokens. The reply is one identifier. A hit is that identifier matching a gold function name. Thinking is off. Temperature is 0. The 31B QAT model from the competition harness does not fit in 16 GB. The 12B QAT model is one of the four models the competition allows.
 
 ## 2. Two ways to read a file that is already known
 
@@ -46,7 +48,18 @@ The file list is still the wrong place to stop. Once tasks whose top file is wro
 
 The first four rows are out of 280. The last three are out of 115. Hit@10 in a file row is a gold file. Every budget column is a gold function whose source fits.
 
-A separate split is worth one number and no policy. Packing a function because the issue spells its name contains the edit on 23 of the 26 development tasks where a gold name appears, and on 25 of the 77 SWE-bench Lite tasks where one appears. Function ranking contains it on 11 and 42 of those same tasks. The position of the edit does not depend on this split. Rows are in `results/place.json`, `results/summary.json` and `results/gemma4/`.
+A separate split is worth one number and no policy. Packing a function because the issue spells its name contains the edit on 23 of the 26 development tasks where a gold name appears, and on 25 of the 77 SWE-bench Lite tasks where one appears. Function ranking contains it on 11 and 42 of those same tasks. The position of the edit does not depend on this split.
+
+Gemma, given 1024 tokens, names the gold function:
+
+| | prefix | functions in the top file | functions, no file list |
+| --- | ---: | ---: | ---: |
+| SWE-bench Lite, all 280 | 88 | 93 | 109 |
+| SWE-bench Lite, top file already right, 62 | 34 | 42 | 40 |
+| development set, all 115 | 38 | 32 | 48 |
+| development set, top file already right, 28 | 17 | 19 | 19 |
+
+On SWE-bench Lite the span packing finds 35 names the prefix misses, and the prefix finds 14 the spans miss. On the development set those two numbers are 16 and 6. Naming a function is not a passing patch. The rows are in `results/model_asks.jsonl`. The packing counts are in `results/place.json`, `results/summary.json` and `results/gemma4/`.
 
 ## 4. Where this sits
 
@@ -54,7 +67,7 @@ File ranking from bug reports is an old result (Zhou, Zhang and Lo, 2012). Agent
 
 ## 5. Limits
 
-Gemma was not run, so a function in context is not a passing patch. The development texts are the public pull requests, not the hidden test and not a byte copy of the competition file. Module-level edits are outside the counts. A pure insertion can be charged to a neighbor. Another tokenizer would move the medians. It would move the prefix and the packed spans by the same rule. The claim is that the edit sits past the prefix, and that packing the functions in a file that is already known recovers part of that gap and not all of it.
+A named function is not a passing patch, and the 12B QAT model is not the 31B QAT model the harness loads. The development texts are the public pull requests, not the hidden test and not a byte copy of the competition file. Module-level edits are outside the counts. A pure insertion can be charged to a neighbor. Another tokenizer would move the medians. It would move the prefix and the packed spans by the same rule. The claim is that the edit sits past the prefix, that packing the functions in a file that is already known recovers part of that gap, and that Gemma names the function more often from those spans than from the prefix of the same budget.
 
 ## References
 
