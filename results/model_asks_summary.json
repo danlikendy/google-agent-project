@@ -1,0 +1,25 @@
+{
+  "model": "gemma4:12b-it-qat",
+  "budget": 1024,
+  "n_rows": 1185,
+  "swebench": {
+    "n": 280,
+    "prefix": 88,
+    "spans": 109,
+    "infile": 93,
+    "file_hit1": 62,
+    "file_hit1_prefix": 34,
+    "file_hit1_spans": 40,
+    "file_hit1_infile": 42
+  },
+  "gemma4": {
+    "n": 115,
+    "prefix": 38,
+    "spans": 48,
+    "infile": 32,
+    "file_hit1": 28,
+    "file_hit1_prefix": 17,
+    "file_hit1_spans": 19,
+    "file_hit1_infile": 19
+  }
+}
